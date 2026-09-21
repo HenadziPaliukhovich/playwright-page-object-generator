@@ -29,32 +29,55 @@ export function Help() {
             <li><strong>Maintainable:</strong> Organized code structure makes tests easier to update</li>
           </ul>
 
-          <h3>How to use it in 3 steps:</h3>
+          <h3>How to use it (2 options):</h3>
+
+          <h4>Option A: Paste URL (Easiest! 🚀)</h4>
           <div className="steps">
             <div className="step">
               <div className="step-number">1</div>
               <div>
-                <strong>Paste HTML</strong>
-                <p>Copy HTML from your website (forms, buttons, inputs) and paste it in the HTML field.</p>
-                <p className="example">Example: Form with login fields, buttons, links, etc.</p>
+                <strong>Paste Website URL</strong>
+                <p>Copy the link to your website and paste it in the URL field.</p>
+                <p className="example">Example: https://example.com/login</p>
               </div>
             </div>
 
             <div className="step">
               <div className="step-number">2</div>
               <div>
-                <strong>Enter Class Name</strong>
-                <p>Give your Page Object a name. It should start with a capital letter.</p>
-                <p className="example">Examples: LoginPage, HeaderComponent, FormPage</p>
+                <strong>Click "Fetch"</strong>
+                <p>The app downloads HTML from your website automatically!</p>
+                <p className="example">No need to open inspector. Just one click.</p>
               </div>
             </div>
 
             <div className="step">
               <div className="step-number">3</div>
               <div>
-                <strong>Click Generate</strong>
-                <p>The app will create TypeScript code. You can copy it or download as .ts file.</p>
-                <p className="example">Use this code in your Playwright test files.</p>
+                <strong>Enter Class Name & Generate</strong>
+                <p>Give your Page Object a name, then click Generate.</p>
+                <p className="example">Class name must start with capital letter: LoginPage ✓</p>
+              </div>
+            </div>
+          </div>
+
+          <h4>Option B: Paste HTML Manually</h4>
+          <div className="steps">
+            <div className="step">
+              <div className="step-number">1</div>
+              <div>
+                <strong>Copy HTML from Inspector</strong>
+                <p>Open browser DevTools (F12), find HTML, and copy it.</p>
+                <p className="example">Right-click element → Inspect → Copy outer HTML</p>
+              </div>
+            </div>
+
+            <div className="step">
+              <div className="step-number">2</div>
+              <div>
+                <strong>Paste & Generate</strong>
+                <p>Paste HTML in the text box and click Generate.</p>
+                <p className="example">Works the same as fetching from URL!</p>
               </div>
             </div>
           </div>
