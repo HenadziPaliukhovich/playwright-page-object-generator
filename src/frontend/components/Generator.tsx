@@ -173,7 +173,7 @@ export function Generator() {
           )}
 
           <div className="stat-row">
-            <span>Elements found: {result.elementCount}</span>
+            <span>Elements found: {result.elementCount} | Locators generated: {result.locatorsGenerated}</span>
           </div>
 
           <pre className="code-output">

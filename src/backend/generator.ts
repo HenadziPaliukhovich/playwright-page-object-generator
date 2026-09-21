@@ -4,6 +4,7 @@ export interface GeneratorResult {
   code: string;
   exampleTest: string;
   elementCount: number;
+  locatorsGenerated: number;
   warnings: string[];
 }
 
@@ -11,14 +12,23 @@ export function generatePageObject(html: string, className: string): GeneratorRe
   const warnings: string[] = [];
 
   try {
-    const $ = load(html);
-    const elements = extractInteractiveElements($);
-
-    if (elements.length === 0) {
-      warnings.push('No interactive elements found in HTML.');
+    if (!html || typeof html !== 'string') {
+      throw new Error('HTML must be a non-empty string');
     }
 
-    const locators = generateLocators(elements, $);
+    const trimmedHtml = html.trim();
+    if (trimmedHtml.length === 0) {
+      throw new Error('HTML cannot be empty');
+    }
+
+    const $ = load(trimmedHtml);
+    const elements = extractInteractiveElements($, warnings);
+
+    if (elements.length === 0) {
+      warnings.push('No interactive elements found in HTML. Add buttons, inputs, or links.');
+    }
+
+    const locators = generateLocators(elements, warnings);
     const methods = generateMethods(locators);
     const code = buildClass(className, locators, methods);
     const exampleTest = buildExampleTest(className, locators);
@@ -27,15 +37,17 @@ export function generatePageObject(html: string, className: string): GeneratorRe
       code,
       exampleTest,
       elementCount: elements.length,
+      locatorsGenerated: Object.keys(locators).length,
       warnings,
     };
   } catch (error) {
-    throw new Error(`Failed to parse HTML: ${String(error)}`);
+    throw new Error(`Failed to generate Page Object: ${String(error)}`);
   }
 }
 
-function extractInteractiveElements($: any): any[] {
+function extractInteractiveElements($: any, warnings: string[]): any[] {
   const elements: any[] = [];
+  const seen = new Set<string>();
   const selectors = [
     'button',
     'input[type="text"]',
@@ -43,28 +55,47 @@ function extractInteractiveElements($: any): any[] {
     'input[type="password"]',
     'input[type="checkbox"]',
     'input[type="radio"]',
+    'input[type="number"]',
+    'input[type="date"]',
+    'input[type="search"]',
+    'input[type="file"]',
+    'input[type="url"]',
     'textarea',
     'select',
-    'a',
+    'a[href]',
     '[role="button"]',
     '[role="link"]',
   ];
 
   selectors.forEach((selector) => {
-    $(selector).each((_: number, el: any) => {
-      const $el = $(el);
-      elements.push({
-        tag: el.name,
-        type: $el.attr('type'),
-        name: $el.attr('name'),
-        id: $el.attr('id'),
-        text: $el.text()?.trim(),
-        placeholder: $el.attr('placeholder'),
-        ariaLabel: $el.attr('aria-label'),
-        role: $el.attr('role'),
-        label: findLabel($, $el),
+    try {
+      $(selector).each((_: number, el: any) => {
+        const $el = $(el);
+        const id = $el.attr('id');
+        const name = $el.attr('name');
+        const text = $el.text()?.trim();
+        const elementKey = `${el.name}:${id || name || text}`;
+
+        if (!seen.has(elementKey)) {
+          seen.add(elementKey);
+          elements.push({
+            tag: el.name,
+            type: $el.attr('type'),
+            name: name,
+            id: id,
+            text: text,
+            placeholder: $el.attr('placeholder'),
+            ariaLabel: $el.attr('aria-label'),
+            ariaLabelledBy: $el.attr('aria-labelledby'),
+            role: $el.attr('role'),
+            label: findLabel($, $el),
+            dataTestId: $el.attr('data-testid'),
+          });
+        }
       });
-    });
+    } catch (err) {
+      warnings.push(`Failed to parse selector: ${selector}`);
+    }
   });
 
   return elements;
@@ -75,22 +106,31 @@ function findLabel($: any, $el: any): string | null {
   if (id) {
     const $label = $(`label[for="${id}"]`);
     if ($label.length > 0) {
-      return $label.text()?.trim() || null;
+      const labelText = $label.text()?.trim();
+      return labelText ? labelText : null;
     }
   }
   return null;
 }
 
-function generateLocators(elements: any[], $: any): Record<string, any> {
+function generateLocators(elements: any[], warnings: string[]): Record<string, any> {
   const locators: Record<string, any> = {};
   const usedNames = new Set<string>();
 
   elements.forEach((el, idx) => {
-    const name = generateLocatorName(el, idx, usedNames);
-    usedNames.add(name);
+    try {
+      const name = generateLocatorName(el, idx, usedNames);
+      usedNames.add(name);
 
-    const locator = generateLocator(el, $);
-    locators[name] = locator;
+      const locator = generateLocator(el);
+      if (locator) {
+        locators[name] = locator;
+      } else {
+        warnings.push(`Could not generate locator for element at index ${idx}`);
+      }
+    } catch (err) {
+      warnings.push(`Error generating locator for element ${idx}`);
+    }
   });
 
   return locators;
@@ -99,38 +139,49 @@ function generateLocators(elements: any[], $: any): Record<string, any> {
 function generateLocatorName(el: any, idx: number, usedNames: Set<string>): string {
   let name = '';
 
-  if (el.id) {
+  if (el.dataTestId) {
+    name = camelCase(el.dataTestId) + 'Locator';
+  } else if (el.id) {
     name = camelCase(el.id) + 'Locator';
   } else if (el.name) {
     name = camelCase(el.name) + 'Locator';
-  } else if (el.text) {
-    const candidate = camelCase(el.text.slice(0, 20));
-    name = candidate ? candidate + 'Locator' : `element${idx}Locator`;
   } else if (el.placeholder) {
     name = camelCase(el.placeholder) + 'Locator';
+  } else if (el.text && el.text.length > 0) {
+    const candidate = camelCase(el.text.slice(0, 25));
+    name = candidate ? candidate + 'Locator' : `element${idx}Locator`;
   } else if (el.ariaLabel) {
     name = camelCase(el.ariaLabel) + 'Locator';
   } else {
     name = `element${idx}Locator`;
   }
 
-  // Remove invalid characters and ensure it's a valid identifier
+  // Sanitize: remove invalid characters
   name = name.replace(/[^a-zA-Z0-9_$]/g, '');
-  name = name.replace(/^[0-9]/, '_$&');
+  // Ensure it doesn't start with a number
+  if (/^[0-9]/.test(name)) {
+    name = '_' + name;
+  }
 
   // Ensure uniqueness
   let finalName = name;
   let counter = 1;
   while (usedNames.has(finalName)) {
-    finalName = name.replace('Locator', '') + counter + 'Locator';
+    const baseName = name.replace('Locator', '');
+    finalName = baseName + counter + 'Locator';
     counter++;
   }
 
-  return finalName;
+  return finalName || `element${idx}Locator`;
 }
 
-function generateLocator(el: any, $: any): string {
-  // Prefer semantic locators
+function generateLocator(el: any): string | null {
+  // 1. Try data-testid first
+  if (el.dataTestId) {
+    return `getByTestId('${escapeString(el.dataTestId)}')`;
+  }
+
+  // 2. Try aria labels
   if (el.ariaLabel) {
     return `getByLabel('${escapeString(el.ariaLabel)}')`;
   }
@@ -139,47 +190,49 @@ function generateLocator(el: any, $: any): string {
     return `getByLabel('${escapeString(el.label)}')`;
   }
 
-  if (el.role === 'button' || el.tag === 'button') {
-    if (el.text) {
-      return `getByRole('button', { name: '${escapeString(el.text)}' })`;
-    }
+  // 3. Try semantic roles
+  if ((el.role === 'button' || el.tag === 'button') && el.text) {
+    return `getByRole('button', { name: '${escapeString(el.text)}' })`;
   }
 
   if (el.tag === 'a' && el.text) {
     return `getByRole('link', { name: '${escapeString(el.text)}' })`;
   }
 
+  // 4. Try placeholder
   if (el.placeholder) {
     return `getByPlaceholder('${escapeString(el.placeholder)}')`;
   }
 
-  if (el.text && (el.role === 'button' || el.tag === 'button')) {
+  // 5. Try text content
+  if (el.text && el.text.length > 0) {
     return `getByText('${escapeString(el.text)}')`;
   }
 
+  // 6. Fallback: use ID or name
   if (el.id) {
-    return `getByTestId('${escapeString(el.id)}')`;
+    return `locator('#${escapeString(el.id)}')`;
   }
 
-  if (el.text) {
-    return `getByText('${escapeString(el.text)}')`;
-  }
-
-  // Fallback to CSS if nothing else works
   if (el.name) {
     return `locator('[name="${escapeString(el.name)}"]')`;
   }
 
-  return `locator('${escapeString(el.tag)}')`;
+  // 7. Last resort: CSS selector by tag
+  if (el.type) {
+    return `locator('${el.tag}[type="${escapeString(el.type)}"]')`;
+  }
+
+  return null;
 }
 
 function generateMethods(locators: Record<string, any>): string[] {
   const methods: string[] = [];
 
   Object.entries(locators).forEach(([name]) => {
-    const methodName = name.replace('Locator', '');
+    const getterName = name.replace('Locator', '');
     methods.push(
-      `  get ${methodName}() {`,
+      `  get ${getterName}() {`,
       `    return this.${name}();`,
       `  }`,
       ``
@@ -206,6 +259,18 @@ function generateMethods(locators: Record<string, any>): string[] {
     ``,
     `  async isVisible(locatorFn: () => any) {`,
     `    return await locatorFn().isVisible();`,
+    `  }`,
+    ``,
+    `  async isChecked(locatorFn: () => any) {`,
+    `    return await locatorFn().isChecked();`,
+    `  }`,
+    ``,
+    `  async check(locatorFn: () => any) {`,
+    `    await locatorFn().check();`,
+    `  }`,
+    ``,
+    `  async uncheck(locatorFn: () => any) {`,
+    `    await locatorFn().uncheck();`,
     `  }`
   );
 
@@ -236,15 +301,16 @@ function buildClass(className: string, locators: Record<string, any>, methods: s
 function buildExampleTest(className: string, locators: Record<string, any>): string {
   const lines: string[] = [];
   const firstLocatorName = Object.keys(locators)[0];
-  const getterName = firstLocatorName.replace('Locator', '');
+  const getterName = firstLocatorName ? firstLocatorName.replace('Locator', '') : 'firstElement';
 
   lines.push(`import { test, expect } from '@playwright/test';`);
   lines.push(`import { ${className} } from './${className}';`, ``);
   lines.push(`test('example: using ${className}', async ({ page }) => {`);
+  lines.push(`  // Navigate to your target page`);
   lines.push(`  await page.goto('https://example.com');`);
   lines.push(`  const pageObject = new ${className}(page);`);
   lines.push(``);
-  lines.push(`  // Example: interact with page elements using locators`);
+  lines.push(`  // Interact with elements using the page object`);
   lines.push(`  await pageObject.click(() => pageObject.${getterName});`);
   lines.push(`  await expect(pageObject.${getterName}).toBeVisible();`);
   lines.push(`});`);
@@ -253,16 +319,18 @@ function buildExampleTest(className: string, locators: Record<string, any>): str
 }
 
 function camelCase(str: string): string {
+  if (!str || str.length === 0) return '';
   return str
     .toLowerCase()
     .replace(/[^a-z0-9]+(.)/g, (_, c) => c.toUpperCase())
     .replace(/^[0-9]/, (c) => '_' + c);
 }
 
-function capitalize(str: string): string {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
 function escapeString(str: string): string {
-  return str.replace(/'/g, "\\'").replace(/\n/g, '\\n');
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t');
 }
