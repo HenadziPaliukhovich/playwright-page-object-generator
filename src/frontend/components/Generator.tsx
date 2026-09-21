@@ -4,6 +4,7 @@ import '../styles/Generator.css'
 
 export function Generator() {
   const [html, setHtml] = useState('')
+  const [url, setUrl] = useState('')
   const [className, setClassName] = useState('')
   const [result, setResult] = useState<GeneratorResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -114,16 +115,87 @@ export function Generator() {
 
   const handleReset = () => {
     setHtml('')
+    setUrl('')
     setClassName('')
     setResult(null)
     setError('')
     setCopied(false)
   }
 
+  const handleFetchUrl = async () => {
+    setError('')
+    setCopied(false)
+
+    if (!url.trim()) {
+      setError('Please enter a URL')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+      const response = await fetch('/api/fetch-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim() }),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to fetch URL')
+      }
+
+      const data = await response.json()
+      setHtml(data.html)
+      setError('')
+    } catch (err) {
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setError('Request timed out. The website may be slow or unreachable.')
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError('Unknown error')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="generator">
       <div className="panel input-panel">
         <h2>Input</h2>
+
+        <div className="form-group">
+          <label htmlFor="url">Load from URL (Optional)</label>
+          <div className="url-input-group">
+            <input
+              id="url"
+              type="text"
+              placeholder="https://example.com/page"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              disabled={loading}
+            />
+            <button
+              onClick={handleFetchUrl}
+              disabled={loading || !url.trim()}
+              className="btn btn-secondary btn-small"
+            >
+              {loading ? 'Fetching...' : 'Fetch'}
+            </button>
+          </div>
+          <p className="help-text">or paste HTML manually below</p>
+        </div>
+
         <div className="form-group">
           <label htmlFor="className">Class Name *</label>
           <input
@@ -140,7 +212,7 @@ export function Generator() {
           <label htmlFor="html">HTML *</label>
           <textarea
             id="html"
-            placeholder="Paste your HTML here..."
+            placeholder="Paste your HTML here or use 'Fetch' above..."
             value={html}
             onChange={(e) => setHtml(e.target.value)}
             disabled={loading}

@@ -108,6 +108,42 @@
   cursor: not-allowed;
 }
 
+.btn-small {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+.url-input-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.url-input-group input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.url-input-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.url-input-group button {
+  white-space: nowrap;
+}
+
+.help-text {
+  font-size: 0.8rem;
+  color: #999;
+  margin: 0.25rem 0 0 0;
+  font-style: italic;
+}
+
 .error-message {
   background: #fee;
   color: #c33;
