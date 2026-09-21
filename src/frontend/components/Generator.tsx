@@ -11,6 +11,17 @@ export function Generator() {
   const [tab, setTab] = useState<'code' | 'test'>('code')
   const [copied, setCopied] = useState(false)
 
+  const RESERVED_KEYWORDS = new Set([
+    'abstract', 'arguments', 'await', 'boolean', 'break', 'byte', 'case', 'catch',
+    'char', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+    'double', 'else', 'enum', 'eval', 'export', 'extends', 'false', 'final',
+    'finally', 'float', 'for', 'function', 'goto', 'if', 'implements', 'import',
+    'in', 'instanceof', 'int', 'interface', 'let', 'long', 'native', 'new', 'null',
+    'package', 'private', 'protected', 'public', 'return', 'short', 'static', 'super',
+    'switch', 'synchronized', 'this', 'throw', 'throws', 'transient', 'true', 'try',
+    'typeof', 'var', 'void', 'volatile', 'while', 'with', 'yield', 'Page', 'Test',
+  ])
+
   const handleGenerate = async () => {
     setError('')
     setResult(null)
@@ -31,14 +42,25 @@ export function Generator() {
       return
     }
 
+    if (RESERVED_KEYWORDS.has(className)) {
+      setError(`"${className}" is a reserved keyword. Please choose a different name.`)
+      return
+    }
+
     setLoading(true)
 
     try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
+
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ html, className }),
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       if (!response.ok) {
         const data = await response.json()
@@ -48,7 +70,15 @@ export function Generator() {
       const data: GeneratorResult = await response.json()
       setResult(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setError('Request timed out. The HTML may be too large or the server is slow.')
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError('Unknown error')
+      }
     } finally {
       setLoading(false)
     }
@@ -124,7 +154,13 @@ export function Generator() {
             disabled={loading || !html.trim() || !className.trim()}
             className="btn btn-primary"
           >
-            {loading ? 'Generating...' : 'Generate'}
+            {loading ? (
+              <>
+                <span className="spinner"></span> Generating...
+              </>
+            ) : (
+              'Generate'
+            )}
           </button>
           <button
             onClick={handleReset}
@@ -135,6 +171,7 @@ export function Generator() {
           </button>
         </div>
 
+        {loading && <div className="loading-message">Processing your HTML... This may take a few seconds for large files.</div>}
         {error && <div className="error-message">{error}</div>}
       </div>
 

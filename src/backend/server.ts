@@ -8,6 +8,17 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+const RESERVED_KEYWORDS = new Set([
+  'abstract', 'arguments', 'await', 'boolean', 'break', 'byte', 'case', 'catch',
+  'char', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+  'double', 'else', 'enum', 'eval', 'export', 'extends', 'false', 'final',
+  'finally', 'float', 'for', 'function', 'goto', 'if', 'implements', 'import',
+  'in', 'instanceof', 'int', 'interface', 'let', 'long', 'native', 'new', 'null',
+  'package', 'private', 'protected', 'public', 'return', 'short', 'static', 'super',
+  'switch', 'synchronized', 'this', 'throw', 'throws', 'transient', 'true', 'try',
+  'typeof', 'var', 'void', 'volatile', 'while', 'with', 'yield', 'Page', 'Test',
+]);
+
 app.post('/generate', (req, res) => {
   try {
     const { html, className } = req.body;
@@ -20,10 +31,15 @@ app.post('/generate', (req, res) => {
       return res.status(400).json({ error: 'Invalid class name format' });
     }
 
+    if (RESERVED_KEYWORDS.has(className)) {
+      return res.status(400).json({ error: `"${className}" is a reserved keyword. Please choose a different name.` });
+    }
+
     const result = generatePageObject(html, className);
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: errorMessage });
   }
 });
 

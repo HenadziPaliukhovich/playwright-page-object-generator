@@ -14,6 +14,13 @@ export function generatePageObject(html: string, className: string): GeneratorRe
       throw new Error('HTML cannot be empty');
     }
 
+    // Warn if HTML is very large (>1MB)
+    if (trimmedHtml.length > 1048576) {
+      warnings.push('⚠️  HTML is very large (>1MB). Generation may take 30+ seconds.');
+    } else if (trimmedHtml.length > 500000) {
+      warnings.push('⚠️  HTML is large (>500KB). Generation may take 10+ seconds.');
+    }
+
     const $ = load(trimmedHtml);
     const elements = extractInteractiveElements($, warnings);
 
@@ -156,16 +163,26 @@ function generateLocatorName(el: any, idx: number, usedNames: Set<string>): stri
     name = '_' + name;
   }
 
-  // Ensure uniqueness
+  // Ensure it's not empty after sanitization
+  if (!name) {
+    name = `element${idx}Locator`;
+  }
+
+  // Ensure uniqueness with more robust strategy
   let finalName = name;
   let counter = 1;
   while (usedNames.has(finalName)) {
-    const baseName = name.replace('Locator', '');
+    const baseName = name.replace('Locator', '').replace(/\d+$/, '');
     finalName = baseName + counter + 'Locator';
     counter++;
+    // Safety check to prevent infinite loop
+    if (counter > 1000) {
+      finalName = `element${idx}Locator`;
+      break;
+    }
   }
 
-  return finalName || `element${idx}Locator`;
+  return finalName;
 }
 
 function generateLocator(el: any): string | null {
@@ -221,18 +238,22 @@ function generateLocator(el: any): string | null {
 
 function generateMethods(locators: Record<string, any>): string[] {
   const methods: string[] = [];
+  const locatorCount = Object.keys(locators).length;
 
-  Object.entries(locators).forEach(([name]) => {
-    const getterName = name.replace('Locator', '');
-    methods.push(
-      `  get ${getterName}() {`,
-      `    return this.${name}();`,
-      `  }`,
-      ``
-    );
-  });
+  // Only generate individual getters for small-medium page objects
+  if (locatorCount <= 100) {
+    Object.entries(locators).forEach(([name]) => {
+      const getterName = name.replace('Locator', '');
+      methods.push(
+        `  get ${getterName}() {`,
+        `    return this.${name}();`,
+        `  }`,
+        ``
+      );
+    });
+  }
 
-  // Common action methods
+  // Common action methods (always included)
   methods.push(
     `  async click(locatorFn: () => any) {`,
     `    await locatorFn().click();`,
@@ -267,28 +288,34 @@ function generateMethods(locators: Record<string, any>): string[] {
     `  }`
   );
 
+  // Add warning for very large page objects
+  if (locatorCount > 100) {
+    methods.unshift(
+      `  // Note: This Page Object has ${locatorCount} locators. Consider splitting into multiple classes.`,
+      ``
+    );
+  }
+
   return methods;
 }
 
 function buildClass(className: string, locators: Record<string, any>, methods: string[]): string {
-  const lines: string[] = [];
+  const locatorCount = Object.keys(locators).length;
+  let code = `import { Page } from '@playwright/test';\n\nexport class ${className} {\n  constructor(private page: Page) {}\n\n`;
 
-  lines.push(`import { Page } from '@playwright/test';`, ``);
-  lines.push(`export class ${className} {`, `  constructor(private page: Page) {}`, ``);
-
-  // Locators
-  Object.entries(locators).forEach(([name, locator]) => {
-    lines.push(`  ${name} = () => this.page.${locator};`);
-  });
-
-  lines.push(``);
+  // Locators - use single join for performance
+  const locatorLines = Object.entries(locators).map(
+    ([name, locator]) => `  ${name} = () => this.page.${locator};`
+  );
+  code += locatorLines.join('\n');
+  code += '\n\n';
 
   // Methods
-  lines.push(...methods);
+  code += methods.join('\n');
 
-  lines.push(`}`);
+  code += '\n}';
 
-  return lines.join('\n');
+  return code;
 }
 
 function buildExampleTest(className: string, locators: Record<string, any>): string {
