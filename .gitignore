@@ -47,3 +47,7 @@ Thumbs.db
 # Test coverage
 coverage/
 .nyc_output/
+
+# Local documentation (not published)
+*.md
+!README.md
