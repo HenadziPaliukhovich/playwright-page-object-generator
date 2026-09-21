@@ -54,6 +54,14 @@ See? The test code is clean and readable!
 
 ### Step 1: Get HTML from Your Website
 
+**Option A: Paste URL (Easiest!)**
+1. Copy the URL of your page: `https://example.com/login`
+2. Paste in "Load from URL" field
+3. Click "Fetch" button
+4. HTML loads automatically! Skip to Step 2.
+
+**Option B: Manual HTML Extraction**
+
 **What you need:**
 - HTML code of the page you want to test
 - Usually contains: buttons, input fields, links, forms, etc.
@@ -64,6 +72,7 @@ See? The test code is clean and readable!
 2. Right-click on the page → "Inspect" (or press F12)
 3. Find the HTML you want (form, buttons, etc.)
 4. Right-click → "Copy" → "Copy element" or "Copy outer HTML"
+5. Paste in "HTML" field below
 ```
 
 **Example HTML you might copy:**
@@ -80,16 +89,14 @@ See? The test code is clean and readable!
 </form>
 ```
 
-### Step 2: Paste HTML & Enter Class Name
+### Step 2: Enter Class Name
 
-1. **Open this tool** at `http://localhost:5173`
-2. **Paste HTML** into the large text box on the left
-3. **Enter a class name** (top of left panel)
+1. **Enter a class name** in the "Class Name" field
    - Should start with capital letter
    - Examples: `LoginPage`, `HeaderComponent`, `CheckoutForm`
    - ❌ Don't use: `loginPage`, `Page`, `import`, `export`
 
-### Step 3: Click "Generate"
+### Step 3: Click "Generate" (or "Regenerate" if you already have HTML)
 
 You'll see:
 - ✅ Green box: "Processing your HTML..."
@@ -189,10 +196,16 @@ test('user can login with correct credentials', async ({ page }) => {
 - ✅ `LoginPage`, `HeaderComponent`, `FormPage`
 
 ### Problem: "Request timed out"
-**Cause:** HTML too large (>500KB)
+**Cause 1:** HTML too large (>500KB)
 **Solution:** Try with smaller HTML snippet
 - Split the page into multiple Page Objects
 - Test smaller sections separately
+
+**Cause 2:** Website took too long to load
+**Solution:** 
+- Try again, website may be slow
+- Use manual HTML extraction instead
+- Check if website is accessible from your network
 
 ### Problem: No locators generated
 **Cause:** HTML doesn't have buttons, inputs, or links
