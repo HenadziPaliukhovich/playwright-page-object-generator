@@ -1,12 +1,5 @@
 import { load } from 'cheerio';
-
-export interface GeneratorResult {
-  code: string;
-  exampleTest: string;
-  elementCount: number;
-  locatorsGenerated: number;
-  warnings: string[];
-}
+import type { GeneratorResult } from '../shared/types.js';
 
 export function generatePageObject(html: string, className: string): GeneratorResult {
   const warnings: string[] = [];

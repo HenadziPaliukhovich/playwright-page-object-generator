@@ -1,12 +1,6 @@
 import { useState } from 'react'
+import type { GeneratorResult } from '../../shared/types'
 import '../styles/Generator.css'
-
-interface GeneratorResult {
-  code: string
-  exampleTest: string
-  elementCount: number
-  warnings: string[]
-}
 
 export function Generator() {
   const [html, setHtml] = useState('')
@@ -60,13 +54,16 @@ export function Generator() {
     }
   }
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (result) {
       const text = tab === 'code' ? result.code : result.exampleTest
-      navigator.clipboard.writeText(text).then(() => {
+      try {
+        await navigator.clipboard.writeText(text)
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
-      })
+      } catch (err) {
+        console.error('Failed to copy:', err)
+      }
     }
   }
 
