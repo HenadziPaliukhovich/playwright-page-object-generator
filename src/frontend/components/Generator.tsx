@@ -9,7 +9,7 @@ export function Generator() {
   const [result, setResult] = useState<GeneratorResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<'code' | 'test'>('code')
+  const [tab, setTab] = useState<'code' | 'test' | 'setup'>('code')
   const [copied, setCopied] = useState(false)
 
   const RESERVED_KEYWORDS = new Set([
@@ -250,19 +250,25 @@ export function Generator() {
       {result && (
         <div className="panel output-panel">
           <div className="output-header">
-            <h2>Generated Page Object</h2>
+            <h2>Generated Output</h2>
             <div className="output-tabs">
               <button
                 className={`tab ${tab === 'code' ? 'active' : ''}`}
                 onClick={() => setTab('code')}
               >
-                Class
+                Page Object
               </button>
               <button
                 className={`tab ${tab === 'test' ? 'active' : ''}`}
                 onClick={() => setTab('test')}
               >
-                Example Test
+                Test File
+              </button>
+              <button
+                className={`tab ${tab === 'setup' ? 'active' : ''}`}
+                onClick={() => setTab('setup')}
+              >
+                Setup Guide
               </button>
             </div>
           </div>
@@ -283,16 +289,22 @@ export function Generator() {
           </div>
 
           <pre className="code-output">
-            <code>{tab === 'code' ? result.code : result.exampleTest}</code>
+            <code>
+              {tab === 'code' && result.code}
+              {tab === 'test' && result.exampleTest}
+              {tab === 'setup' && result.projectStructure}
+            </code>
           </pre>
 
           <div className="button-group">
-            <button
-              onClick={handleCopy}
-              className={`btn btn-primary ${copied ? 'copied' : ''}`}
-            >
-              {copied ? '✓ Copied' : 'Copy to Clipboard'}
-            </button>
+            {tab !== 'setup' && (
+              <button
+                onClick={handleCopy}
+                className={`btn btn-primary ${copied ? 'copied' : ''}`}
+              >
+                {copied ? '✓ Copied' : 'Copy to Clipboard'}
+              </button>
+            )}
             {tab === 'code' && (
               <button onClick={handleDownload} className="btn btn-secondary">
                 Download .ts File

@@ -32,10 +32,12 @@ export function generatePageObject(html: string, className: string): GeneratorRe
     const methods = generateMethods(locators);
     const code = buildClass(className, locators, methods);
     const exampleTest = buildExampleTest(className, locators);
+    const projectStructure = buildProjectStructure(className);
 
     return {
       code,
       exampleTest,
+      projectStructure,
       elementCount: elements.length,
       locatorsGenerated: Object.keys(locators).length,
       warnings,
@@ -320,19 +322,52 @@ function buildClass(className: string, locators: Record<string, any>, methods: s
 
 function buildExampleTest(className: string, locators: Record<string, any>): string {
   const lines: string[] = [];
-  const firstLocatorName = Object.keys(locators)[0];
+  const locatorNames = Object.keys(locators);
+  const firstLocatorName = locatorNames[0];
+  const secondLocatorName = locatorNames[1];
   const getterName = firstLocatorName ? firstLocatorName.replace('Locator', '') : 'firstElement';
+  const secondGetterName = secondLocatorName ? secondLocatorName.replace('Locator', '') : 'secondElement';
 
   lines.push(`import { test, expect } from '@playwright/test';`);
-  lines.push(`import { ${className} } from './${className}';`, ``);
-  lines.push(`test('example: using ${className}', async ({ page }) => {`);
-  lines.push(`  // Navigate to your target page`);
-  lines.push(`  await page.goto('https://example.com');`);
-  lines.push(`  const pageObject = new ${className}(page);`);
-  lines.push(``);
-  lines.push(`  // Interact with elements using the page object`);
-  lines.push(`  await pageObject.click(() => pageObject.${getterName});`);
-  lines.push(`  await expect(pageObject.${getterName}).toBeVisible();`);
+  lines.push(`import { ${className} } from './pages/${className}';`, ``);
+
+  lines.push(`// Test file example for ${className}`);
+  lines.push(`// Replace 'https://example.com' with your actual page URL`, ``);
+
+  lines.push(`test.describe('${className}', () => {`);
+  lines.push(`  let page${className}: ${className};`, ``);
+
+  lines.push(`  test.beforeEach(async ({ page }) => {`);
+  lines.push(`    // Navigate to your page`);
+  lines.push(`    await page.goto('https://example.com');`);
+  lines.push(`    page${className} = new ${className}(page);`);
+  lines.push(`  });`, ``);
+
+  lines.push(`  test('should display page elements', async () => {`);
+  lines.push(`    // Verify key elements are visible`);
+  if (firstLocatorName) {
+    lines.push(`    await expect(page${className}.${getterName}).toBeVisible();`);
+  }
+  if (secondLocatorName) {
+    lines.push(`    await expect(page${className}.${secondGetterName}).toBeVisible();`);
+  }
+  lines.push(`  });`, ``);
+
+  lines.push(`  test('should interact with elements', async () => {`);
+  lines.push(`    // Example: Click an element`);
+  if (firstLocatorName) {
+    lines.push(`    await page${className}.click(() => page${className}.${getterName});`);
+  }
+  lines.push(`    // Example: Fill a field`);
+  lines.push(`    // await page${className}.fill(() => page${className}.${getterName}, 'test value');`);
+  lines.push(`  });`, ``);
+
+  lines.push(`  test('should verify text content', async () => {`);
+  if (firstLocatorName) {
+    lines.push(`    const text = await page${className}.getText(() => page${className}.${getterName});`);
+    lines.push(`    expect(text).toBeTruthy();`);
+  }
+  lines.push(`  });`);
   lines.push(`});`);
 
   return lines.join('\n');
@@ -353,4 +388,94 @@ function escapeString(str: string): string {
     .replace(/\n/g, '\\n')
     .replace(/\r/g, '\\r')
     .replace(/\t/g, '\\t');
+}
+
+function buildProjectStructure(className: string): string {
+  const lines: string[] = [];
+
+  lines.push('# 📁 Recommended Project Structure\n');
+  lines.push('```');
+  lines.push('my-test-project/');
+  lines.push('├── pages/');
+  lines.push(`│   ├── ${className}.ts          ← Save your generated class here`);
+  lines.push('│   ├── LoginPage.ts             (other page objects)');
+  lines.push('│   └── HeaderComponent.ts');
+  lines.push('├── tests/');
+  lines.push(`│   ├── ${className}.spec.ts    ← Save test file here`);
+  lines.push('│   ├── login.spec.ts');
+  lines.push('│   └── navigation.spec.ts');
+  lines.push('├── playwright.config.ts');
+  lines.push('├── package.json');
+  lines.push('└── tsconfig.json');
+  lines.push('```\n');
+
+  lines.push('## 📋 Quick Setup\n');
+
+  lines.push('### 1. Create Project Folders\n');
+  lines.push('```bash');
+  lines.push('mkdir -p my-test-project/{pages,tests}');
+  lines.push('cd my-test-project');
+  lines.push('```\n');
+
+  lines.push('### 2. Initialize Playwright Project\n');
+  lines.push('```bash');
+  lines.push('npm init -y');
+  lines.push('npm install --save-dev @playwright/test typescript ts-node @types/node');
+  lines.push('npx playwright install');
+  lines.push('```\n');
+
+  lines.push('### 3. Create Configuration Files\n');
+
+  lines.push('**tsconfig.json:**');
+  lines.push('```json');
+  lines.push('{');
+  lines.push('  "compilerOptions": {');
+  lines.push('    "target": "ES2020",');
+  lines.push('    "module": "commonjs",');
+  lines.push('    "lib": ["ES2020"],');
+  lines.push('    "strict": true,');
+  lines.push('    "esModuleInterop": true');
+  lines.push('  }');
+  lines.push('}');
+  lines.push('```\n');
+
+  lines.push('**playwright.config.ts:**');
+  lines.push('```typescript');
+  lines.push('import { defineConfig } from "@playwright/test";');
+  lines.push('');
+  lines.push('export default defineConfig({');
+  lines.push('  testDir: "./tests",');
+  lines.push('  use: {');
+  lines.push('    baseURL: "https://your-website.com",');
+  lines.push('    screenshot: "only-on-failure",');
+  lines.push('    video: "retain-on-failure"');
+  lines.push('  }');
+  lines.push('});');
+  lines.push('```\n');
+
+  lines.push('### 4. Add Generated Files\n');
+  lines.push(`1. Save generated class to: \`pages/${className}.ts\``);
+  lines.push(`2. Save test file to: \`tests/${className}.spec.ts\``);
+  lines.push('3. Update baseURL in playwright.config.ts\n');
+
+  lines.push('### 5. Run Tests\n');
+  lines.push('```bash');
+  lines.push('npm test                          # Run all tests');
+  lines.push(`npm run test -- ${className}      # Run specific test`);
+  lines.push('npm run test -- --headed          # Run with browser visible');
+  lines.push('npm run test -- --debug           # Debug mode');
+  lines.push('```\n');
+
+  lines.push('## 📚 Useful Links\n');
+  lines.push('- [Playwright Documentation](https://playwright.dev)');
+  lines.push('- [Page Object Model](https://playwright.dev/docs/test-pom)');
+  lines.push('- [Running Tests](https://playwright.dev/docs/running-tests)\n');
+
+  lines.push('## 💡 Tips\n');
+  lines.push('- Import your Page Object: `import { ' + className + ' } from "../pages/' + className + '";`');
+  lines.push('- Create one Page Object per page/component');
+  lines.push('- Keep tests in tests/ and Page Objects in pages/');
+  lines.push('- Commit both to version control\n');
+
+  return lines.join('\n');
 }
