@@ -1,7 +1,7 @@
 import { load } from 'cheerio';
 import type { GeneratorResult } from '../shared/types.js';
 
-export function generatePageObject(html: string, className: string): GeneratorResult {
+export function generatePageObject(html: string, className: string, language: 'typescript' | 'python' | 'javascript' = 'typescript'): GeneratorResult {
   const warnings: string[] = [];
 
   try {
@@ -29,10 +29,10 @@ export function generatePageObject(html: string, className: string): GeneratorRe
     }
 
     const locators = generateLocators(elements, warnings);
-    const methods = generateMethods(locators);
-    const code = buildClass(className, locators, methods);
-    const exampleTest = buildExampleTest(className, locators);
-    const projectStructure = buildProjectStructure(className);
+    const methods = generateMethods(locators, language);
+    const code = buildClass(className, locators, methods, language);
+    const exampleTest = buildExampleTest(className, locators, language);
+    const projectStructure = buildProjectStructure(className, language);
 
     return {
       code,
@@ -238,7 +238,13 @@ function generateLocator(el: any): string | null {
   return null;
 }
 
-function generateMethods(locators: Record<string, any>): string[] {
+function generateMethods(locators: Record<string, any>, language: 'typescript' | 'python' | 'javascript' = 'typescript'): string[] {
+  if (language === 'python') return generatePythonMethods(locators);
+  if (language === 'javascript') return generateJavaScriptMethods(locators);
+  return generateTypeScriptMethods(locators);
+}
+
+function generateTypeScriptMethods(locators: Record<string, any>): string[] {
   const methods: string[] = [];
   const locatorCount = Object.keys(locators).length;
 
@@ -301,26 +307,137 @@ function generateMethods(locators: Record<string, any>): string[] {
   return methods;
 }
 
-function buildClass(className: string, locators: Record<string, any>, methods: string[]): string {
+function generateJavaScriptMethods(locators: Record<string, any>): string[] {
+  // Same as TypeScript but without type annotations
+  const methods: string[] = [];
   const locatorCount = Object.keys(locators).length;
+
+  if (locatorCount <= 100) {
+    Object.entries(locators).forEach(([name]) => {
+      const getterName = name.replace('Locator', '');
+      methods.push(`  get ${getterName}() {`, `    return this.${name}();`, `  }`, ``);
+    });
+  }
+
+  methods.push(
+    `  async click(locatorFn) {`,
+    `    await locatorFn().click();`,
+    `  }`,
+    ``,
+    `  async fill(locatorFn, value) {`,
+    `    await locatorFn().fill(value);`,
+    `  }`,
+    ``,
+    `  async select(locatorFn, value) {`,
+    `    await locatorFn().selectOption(value);`,
+    `  }`,
+    ``,
+    `  async getText(locatorFn) {`,
+    `    return await locatorFn().textContent();`,
+    `  }`,
+    ``,
+    `  async isVisible(locatorFn) {`,
+    `    return await locatorFn().isVisible();`,
+    `  }`
+  );
+
+  return methods;
+}
+
+function generatePythonMethods(locators: Record<string, any>): string[] {
+  const methods: string[] = [];
+  const locatorCount = Object.keys(locators).length;
+
+  if (locatorCount <= 100) {
+    Object.entries(locators).forEach(([name]) => {
+      const methodName = name.replace('_locator', '').replace('Locator', '');
+      const pythonName = pythonCase(methodName);
+      methods.push(`    @property`, `    def ${pythonName}(self):`, `        return self.${pythonCase(name)}`, ``);
+    });
+  }
+
+  methods.push(
+    `    async def click(self, locator_fn):`,
+    `        await locator_fn().click()`,
+    ``,
+    `    async def fill(self, locator_fn, value):`,
+    `        await locator_fn().fill(value)`,
+    ``,
+    `    async def select(self, locator_fn, value):`,
+    `        await locator_fn().select_option(value)`,
+    ``,
+    `    async def get_text(self, locator_fn):`,
+    `        return await locator_fn().text_content()`,
+    ``,
+    `    async def is_visible(self, locator_fn):`,
+    `        return await locator_fn().is_visible()`
+  );
+
+  return methods;
+}
+
+function buildClass(className: string, locators: Record<string, any>, methods: string[], language: 'typescript' | 'python' | 'javascript' = 'typescript'): string {
+  if (language === 'python') return buildPythonClass(className, locators, methods);
+  if (language === 'javascript') return buildJavaScriptClass(className, locators, methods);
+  return buildTypeScriptClass(className, locators, methods);
+}
+
+function buildTypeScriptClass(className: string, locators: Record<string, any>, methods: string[]): string {
   let code = `import { Page } from '@playwright/test';\n\nexport class ${className} {\n  constructor(private page: Page) {}\n\n`;
 
-  // Locators - use single join for performance
   const locatorLines = Object.entries(locators).map(
     ([name, locator]) => `  ${name} = () => this.page.${locator};`
   );
   code += locatorLines.join('\n');
   code += '\n\n';
-
-  // Methods
   code += methods.join('\n');
-
   code += '\n}';
 
   return code;
 }
 
-function buildExampleTest(className: string, locators: Record<string, any>): string {
+function buildJavaScriptClass(className: string, locators: Record<string, any>, methods: string[]): string {
+  let code = `const { Page } = require('@playwright/test');\n\nclass ${className} {\n  constructor(page) {\n    this.page = page;\n  }\n\n`;
+
+  const locatorLines = Object.entries(locators).map(
+    ([name, locator]) => `  ${name} = () => this.page.${locator};`
+  );
+  code += locatorLines.join('\n');
+  code += '\n\n';
+  code += methods.join('\n');
+  code += '\n}\n\nmodule.exports = ${className};';
+
+  return code;
+}
+
+function buildPythonClass(className: string, locators: Record<string, any>, methods: string[]): string {
+  let code = `from playwright.async_api import async_playwright, Page\n\nclass ${className}:\n    def __init__(self, page: Page):\n        self.page = page\n\n`;
+
+  const locatorLines = Object.entries(locators).map(
+    ([name, locator]) => `    @property\n    def ${pythonCase(name)}(self):\n        return self.page.${locator}`
+  );
+  code += locatorLines.join('\n\n');
+  code += '\n\n';
+  code += methods.join('\n');
+
+  return code;
+}
+
+function pythonCase(str: string): string {
+  return str
+    .replace(/Locator$/, '')
+    .replace(/([A-Z])/g, '_$1')
+    .toLowerCase()
+    .replace(/^_/, '');
+}
+
+function buildExampleTest(className: string, locators: Record<string, any>, language: 'typescript' | 'python' | 'javascript' = 'typescript'): string {
+  if (language === 'python') return buildPythonTest(className, locators);
+  if (language === 'javascript') return buildJavaScriptTest(className, locators);
+  return buildTypeScriptTest(className, locators);
+}
+
+function buildTypeScriptTest(className: string, locators: Record<string, any>): string {
   const lines: string[] = [];
   const locatorNames = Object.keys(locators);
   const firstLocatorName = locatorNames[0];
@@ -373,6 +490,51 @@ function buildExampleTest(className: string, locators: Record<string, any>): str
   return lines.join('\n');
 }
 
+function buildJavaScriptTest(className: string, locators: Record<string, any>): string {
+  const firstGetterName = Object.keys(locators)[0]?.replace('Locator', '') || 'firstElement';
+  const lines = [
+    `const { test, expect } = require('@playwright/test');`,
+    `const ${className} = require('./pages/${className}');`,
+    ``,
+    `test.describe('${className}', () => {`,
+    `  let page${className};`,
+    ``,
+    `  test.beforeEach(async ({ page }) => {`,
+    `    await page.goto('https://example.com');`,
+    `    page${className} = new ${className}(page);`,
+    `  });`,
+    ``,
+    `  test('should display elements', async () => {`,
+    `    await expect(page${className}.${firstGetterName}).toBeVisible();`,
+    `  });`,
+    `});`,
+  ];
+  return lines.join('\n');
+}
+
+function buildPythonTest(className: string, locators: Record<string, any>): string {
+  const firstGetterName = pythonCase(Object.keys(locators)[0] || 'first_element');
+  const lines = [
+    `import pytest`,
+    `from playwright.async_api import async_playwright`,
+    `from pages.${pythonCase(className)} import ${className}`,
+    ``,
+    `@pytest.mark.asyncio`,
+    `async def test_page_elements():`,
+    `    async with async_playwright() as p:`,
+    `        browser = await p.chromium.launch()`,
+    `        page = await browser.new_page()`,
+    `        await page.goto('https://example.com')`,
+    `        page_obj = ${className}(page)`,
+    ``,
+    `        # Test element visibility`,
+    `        assert await page_obj.${firstGetterName}.is_visible()`,
+    ``,
+    `        await browser.close()`,
+  ];
+  return lines.join('\n');
+}
+
 function camelCase(str: string): string {
   if (!str || str.length === 0) return '';
   return str
@@ -390,7 +552,17 @@ function escapeString(str: string): string {
     .replace(/\t/g, '\\t');
 }
 
-function buildProjectStructure(className: string): string {
+function buildProjectStructure(className: string, language: 'typescript' | 'python' | 'javascript' = 'typescript'): string {
+  if (language === 'python') {
+    return buildPythonProjectStructure(className);
+  }
+  if (language === 'javascript') {
+    return buildJavaScriptProjectStructure(className);
+  }
+  return buildTypeScriptProjectStructure(className);
+}
+
+function buildTypeScriptProjectStructure(className: string): string {
   const lines: string[] = [];
 
   lines.push('# 📁 Recommended Project Structure\n');
@@ -477,5 +649,54 @@ function buildProjectStructure(className: string): string {
   lines.push('- Keep tests in tests/ and Page Objects in pages/');
   lines.push('- Commit both to version control\n');
 
+  return lines.join('\n');
+}
+
+function buildJavaScriptProjectStructure(className: string): string {
+  const lines = [
+    '# Project Setup\n',
+    '```',
+    'my-test-project/',
+    '├── pages/',
+    `│   └── ${className}.js`,
+    '├── tests/',
+    `│   └── ${className}.spec.js`,
+    '├── package.json',
+    '└── playwright.config.js',
+    '```\n',
+    '## Quick Setup\n',
+    '```bash',
+    'npm init -y',
+    'npm install --save-dev @playwright/test',
+    'npx playwright install',
+    '```\n',
+  ];
+  return lines.join('\n');
+}
+
+function buildPythonProjectStructure(className: string): string {
+  const lines = [
+    '# Project Setup (Python)\n',
+    '```',
+    'my-test-project/',
+    '├── pages/',
+    `│   └── ${pythonCase(className)}.py`,
+    '├── tests/',
+    `│   └── test_${pythonCase(className)}.py`,
+    '├── requirements.txt',
+    '└── pytest.ini',
+    '```\n',
+    '## Quick Setup\n',
+    '```bash',
+    'python -m venv venv',
+    'source venv/bin/activate  # On Windows: venv\\Scripts\\activate',
+    'pip install playwright pytest pytest-asyncio',
+    'playwright install',
+    '```\n',
+    '## Run Tests\n',
+    '```bash',
+    'pytest tests/',
+    '```\n',
+  ];
   return lines.join('\n');
 }

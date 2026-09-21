@@ -6,6 +6,7 @@ export function Generator() {
   const [html, setHtml] = useState('')
   const [url, setUrl] = useState('')
   const [className, setClassName] = useState('')
+  const [language, setLanguage] = useState<'typescript' | 'python' | 'javascript'>('typescript')
   const [result, setResult] = useState<GeneratorResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -60,7 +61,7 @@ export function Generator() {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html, className }),
+        body: JSON.stringify({ html, className, language }),
         signal: controller.signal,
       })
 
@@ -254,6 +255,20 @@ export function Generator() {
             </button>
           </div>
           <p className="help-text">or paste HTML manually below</p>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="language">Language</label>
+          <select
+            id="language"
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as 'typescript' | 'python' | 'javascript')}
+            disabled={loading}
+          >
+            <option value="typescript">TypeScript (Recommended)</option>
+            <option value="python">Python</option>
+            <option value="javascript">JavaScript</option>
+          </select>
         </div>
 
         <div className="form-group">

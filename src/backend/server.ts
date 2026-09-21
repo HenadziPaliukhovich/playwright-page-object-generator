@@ -181,7 +181,7 @@ function validateLocatorSyntax(locator: string): {
 
 app.post('/generate', (req, res) => {
   try {
-    const { html, className } = req.body;
+    const { html, className, language = 'typescript' } = req.body;
 
     if (!html || !className) {
       return res.status(400).json({ error: 'HTML and className are required' });
@@ -195,7 +195,13 @@ app.post('/generate', (req, res) => {
       return res.status(400).json({ error: `"${className}" is a reserved keyword. Please choose a different name.` });
     }
 
-    const result = generatePageObject(html, className);
+    // Validate language
+    const supportedLanguages = ['typescript', 'python', 'javascript'];
+    if (!supportedLanguages.includes(language)) {
+      return res.status(400).json({ error: `Language "${language}" not supported. Use: ${supportedLanguages.join(', ')}` });
+    }
+
+    const result = generatePageObject(html, className, language as 'typescript' | 'python' | 'javascript');
     res.json(result);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
