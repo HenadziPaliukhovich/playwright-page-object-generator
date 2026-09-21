@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { Generator } from './components/Generator'
+import { Help } from './components/Help'
 import './App.css'
 
 function App() {
@@ -10,6 +10,7 @@ function App() {
         <p>Turn HTML snippets into ready-to-use Page Object classes</p>
       </header>
       <main className="main">
+        <Help />
         <Generator />
       </main>
     </div>
