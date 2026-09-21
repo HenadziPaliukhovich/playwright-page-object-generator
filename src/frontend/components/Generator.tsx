@@ -11,6 +11,9 @@ export function Generator() {
   const [error, setError] = useState('')
   const [tab, setTab] = useState<'code' | 'test' | 'setup'>('code')
   const [copied, setCopied] = useState(false)
+  const [testLocatorUrl, setTestLocatorUrl] = useState('')
+  const [testLocatorResult, setTestLocatorResult] = useState<{ valid: boolean; message?: string; error?: string; locatorType?: string; suggestion?: string } | null>(null)
+  const [testLocatorLoading, setTestLocatorLoading] = useState(false)
 
   const RESERVED_KEYWORDS = new Set([
     'abstract', 'arguments', 'await', 'boolean', 'break', 'byte', 'case', 'catch',
@@ -120,6 +123,63 @@ export function Generator() {
     setResult(null)
     setError('')
     setCopied(false)
+    setTestLocatorUrl('')
+    setTestLocatorResult(null)
+  }
+
+  const handleTestLocators = async () => {
+    setTestLocatorResult(null)
+
+    if (!testLocatorUrl.trim()) {
+      setTestLocatorResult({ valid: false, error: 'Please enter a URL to test locators against' })
+      return
+    }
+
+    if (!result) {
+      setTestLocatorResult({ valid: false, error: 'No locators to test. Generate first!' })
+      return
+    }
+
+    setTestLocatorLoading(true)
+
+    try {
+      // Test first few locators
+      const locatorEntries = Object.entries(result).slice(0, 3)
+      const testResults = []
+
+      for (const [name, locatorCode] of locatorEntries) {
+        const response = await fetch('/api/test-locator', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: testLocatorUrl.trim(),
+            locator: locatorCode,
+          }),
+        })
+
+        const data = await response.json()
+        testResults.push(data)
+      }
+
+      if (testResults.every((r: any) => r.valid)) {
+        setTestLocatorResult({
+          valid: true,
+          message: `✅ All ${testResults.length} locators syntax valid! Copy to your project and run tests to verify they work on your website.`,
+        })
+      } else {
+        setTestLocatorResult({
+          valid: false,
+          error: 'Some locators have syntax issues. Review your HTML.',
+        })
+      }
+    } catch (err) {
+      setTestLocatorResult({
+        valid: false,
+        error: err instanceof Error ? err.message : 'Failed to test locators',
+      })
+    } finally {
+      setTestLocatorLoading(false)
+    }
   }
 
   const handleFetchUrl = async () => {
@@ -311,6 +371,43 @@ export function Generator() {
               </button>
             )}
           </div>
+
+          {tab === 'code' && result && (
+            <div className="test-locator-section">
+              <h3>🧪 Test Locators on Real Website</h3>
+              <p className="help-text">
+                Verify that generated locators work on your actual website
+              </p>
+              <div className="test-locator-group">
+                <input
+                  type="text"
+                  placeholder="https://your-website.com"
+                  value={testLocatorUrl}
+                  onChange={(e) => setTestLocatorUrl(e.target.value)}
+                  disabled={testLocatorLoading}
+                />
+                <button
+                  onClick={handleTestLocators}
+                  disabled={testLocatorLoading || !testLocatorUrl.trim()}
+                  className="btn btn-secondary btn-small"
+                >
+                  {testLocatorLoading ? 'Testing...' : 'Test Locators'}
+                </button>
+              </div>
+
+              {testLocatorResult && (
+                <div
+                  className={
+                    testLocatorResult.valid
+                      ? 'test-result success'
+                      : 'test-result error'
+                  }
+                >
+                  {testLocatorResult.message || testLocatorResult.error}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

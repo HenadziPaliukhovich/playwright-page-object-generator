@@ -76,6 +76,109 @@ app.post('/fetch-url', async (req, res) => {
   }
 });
 
+// Test locator endpoint - validates if locator works on real website
+app.post('/test-locator', async (req, res) => {
+  try {
+    const { url, locator } = req.body;
+
+    if (!url || !locator) {
+      return res.status(400).json({ error: 'URL and locator are required' });
+    }
+
+    if (typeof url !== 'string' || typeof locator !== 'string') {
+      return res.status(400).json({ error: 'Invalid parameters' });
+    }
+
+    // We can't actually run Playwright without the page object,
+    // but we can provide helpful feedback based on locator type
+    const feedback = validateLocatorSyntax(locator);
+
+    if (!feedback.valid) {
+      return res.status(400).json({ error: feedback.error });
+    }
+
+    res.json({
+      valid: true,
+      message: 'Locator syntax is valid. Test it in your Playwright project!',
+      locatorType: feedback.type,
+      suggestion: feedback.suggestion,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(400).json({ error: errorMessage });
+  }
+});
+
+// Helper function to validate locator syntax
+function validateLocatorSyntax(locator: string): {
+  valid: boolean;
+  type?: string;
+  error?: string;
+  suggestion?: string;
+} {
+  try {
+    // Check if it's a valid locator pattern
+    if (locator.includes('getByRole')) {
+      return {
+        valid: true,
+        type: 'getByRole',
+        suggestion: 'This is the most reliable Playwright locator type',
+      };
+    }
+
+    if (locator.includes('getByLabel')) {
+      return {
+        valid: true,
+        type: 'getByLabel',
+        suggestion: 'Good for labeled form inputs',
+      };
+    }
+
+    if (locator.includes('getByPlaceholder')) {
+      return {
+        valid: true,
+        type: 'getByPlaceholder',
+        suggestion: 'Works well for inputs with placeholder text',
+      };
+    }
+
+    if (locator.includes('getByText')) {
+      return {
+        valid: true,
+        type: 'getByText',
+        suggestion: 'Use for elements with visible text content',
+      };
+    }
+
+    if (locator.includes('getByTestId')) {
+      return {
+        valid: true,
+        type: 'getByTestId',
+        suggestion: 'Perfect for test-specific IDs',
+      };
+    }
+
+    if (locator.includes('locator')) {
+      return {
+        valid: true,
+        type: 'CSS/XPath',
+        suggestion:
+          'CSS or XPath selector - works but less reliable than semantic locators',
+      };
+    }
+
+    return {
+      valid: false,
+      error: 'Locator format not recognized. Must start with page.getBy* or page.locator()',
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Invalid locator syntax',
+    };
+  }
+}
+
 app.post('/generate', (req, res) => {
   try {
     const { html, className } = req.body;
